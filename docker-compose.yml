@@ -1,0 +1,109 @@
+name: otel-demo
+
+services:
+  lgtm:
+    image: grafana/otel-lgtm:0.35.0
+    ports:
+      - "3000:3000" # Grafana UI (admin/admin)
+    # Deliberately not publishing 4317/4318 here - the collector owns those host ports.
+
+  collector:
+    build: ./collector
+    depends_on:
+      - lgtm
+    ports:
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP (used by the browser)
+      - "8888:8888" # collector's own metrics
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./collector/config.yaml
+          target: /etc/otelcol-contrib/config.yaml
+        - action: rebuild
+          path: ./collector/Dockerfile
+
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: demo
+      POSTGRES_DB: shop
+    # pg_stat_statements must be preloaded for db/init/01-schema.sql's
+    # `CREATE EXTENSION pg_stat_statements` to actually collect stats.
+    command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements"]
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demo -d shop"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./api
+      target: dev
+    ports:
+      - "3001:3000"
+    environment:
+      OTEL_SERVICE_NAME: api
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://collector:4318
+      DEPLOYMENT_ENVIRONMENT: demo
+      DATABASE_URL: postgres://demo:demo@postgres:5432/shop
+      LOG_LEVEL: debug
+    depends_on:
+      collector:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    develop:
+      watch:
+        - action: sync
+          path: ./api/src
+          target: /app/src
+        - action: rebuild
+          path: ./api/package.json
+
+  web:
+    build: ./web
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_OTLP_ENDPOINT: http://localhost:4318
+      API_PROXY_TARGET: http://api:3000
+      CHOKIDAR_USEPOLLING: "true"
+    depends_on:
+      - api
+    develop:
+      watch:
+        - action: sync
+          path: ./web/src
+          target: /app/src
+        - action: rebuild
+          path: ./web/package.json
+
+  # Background traffic generator - a plain curl loop, no build/image of its
+  # own needed. See loadgen/run.sh.
+  loadgen:
+    image: curlimages/curl:8.11.1
+    entrypoint: ["/bin/sh", "/loadgen/run.sh"]
+    volumes:
+      - ./loadgen/run.sh:/loadgen/run.sh:ro
+    environment:
+      TARGET: http://api:3000
+      RPS: "2"
+    depends_on:
+      - api
+    profiles: ["load"]
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./loadgen/run.sh
+          target: /loadgen/run.sh
+
+volumes:
+  pgdata:

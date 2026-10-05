@@ -1,0 +1,86 @@
+# Scenario 03 - Redact & transform PII (see api/src/orders/orders.service.ts):
+#   - `transform` (OTTL): masks the email address on spans and log bodies, e.g. "j***@example.com".
+#   - `redaction`: blanks any attribute value matching a card-number-shaped regex.
+#   ./scripts/scenario.sh 03
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins:
+            - "http://localhost:5173"
+          allowed_headers:
+            - "*"
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+
+  resourcedetection:
+    detectors: [env, system]
+    system:
+      hostname_sources: [os]
+    timeout: 2s
+
+  resource:
+    attributes:
+      - key: deployment.environment.name
+        value: demo
+        action: upsert
+      - key: team
+        value: checkout
+        action: upsert
+
+  transform/mask_email:
+    trace_statements:
+      - context: span
+        statements:
+          - replace_pattern(attributes["customer.email"], "^(.)[^@]*(@.*)$", "$$1***$$2") where attributes["customer.email"] != nil
+    log_statements:
+      - context: log
+        statements:
+          - replace_pattern(body, "^(.)[^@\\s]*(@[^\\s]*)", "$$1***$$2") where IsString(body)
+
+  redaction/card:
+    allow_all_keys: true
+    blocked_values:
+      - '(?:\d[ -]*?){13,16}'
+    summary: debug
+
+  batch: {}
+
+exporters:
+  debug:
+    verbosity: basic
+  otlp/lgtm:
+    endpoint: lgtm:4317
+    tls:
+      insecure: true
+
+service:
+  telemetry:
+    metrics:
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 0.0.0.0
+                port: 8888
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection, resource, transform/mask_email, redaction/card, batch]
+      exporters: [otlp/lgtm, debug]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection, resource, batch]
+      exporters: [otlp/lgtm, debug]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection, resource, transform/mask_email, redaction/card, batch]
+      exporters: [otlp/lgtm, debug]

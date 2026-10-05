@@ -1,0 +1,101 @@
+.page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1.5rem;
+  font-family: system-ui, sans-serif;
+  text-align: left;
+}
+
+header h1 {
+  margin-bottom: 0.25rem;
+}
+
+.subtitle {
+  color: #666;
+  margin-top: 0;
+}
+
+.banner.error {
+  background: #fee;
+  border: 1px solid #f99;
+  color: #900;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  word-break: break-all;
+}
+
+section {
+  margin-bottom: 2rem;
+}
+
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.card {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+.card-title {
+  font-weight: 600;
+}
+
+.card-meta {
+  color: #666;
+  font-size: 0.85rem;
+  margin: 0.25rem 0 0.5rem;
+}
+
+.card-field {
+  display: block;
+  margin: 0.5rem 0;
+}
+
+.hint {
+  color: #666;
+  font-size: 0.85rem;
+  margin-top: -0.25rem;
+}
+
+.cart-list,
+.order-list,
+.trace-list {
+  list-style: none;
+  padding: 0;
+}
+
+.cart-list li,
+.order-list li {
+  padding: 0.25rem 0;
+}
+
+.chaos-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.trace-list li {
+  font-family: ui-monospace, monospace;
+  font-size: 0.85rem;
+  padding: 0.15rem 0;
+}
+
+.trace-list li.fail {
+  color: #900;
+}
+
+button {
+  cursor: pointer;
+}
